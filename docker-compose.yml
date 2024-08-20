@@ -1,0 +1,75 @@
+version: '3.4'
+
+services:
+  api:
+    image: ${DOCKER_REGISTRY-}api
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+
+  pgserver:
+    container_name: accounting_postgres
+    hostname: accounting
+    image: postgres:latest
+    restart: unless-stopped  
+    ports:
+        - 5432:5432
+    environment:
+        POSTGRES_USER: app
+        POSTGRES_PASSWORD: app
+        POSTGRES_DB: accounting_db
+
+  pgadmin:
+    container_name: accounting_pgAdmin
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+        PGADMIN_DEFAULT_EMAIL: admin@admin.com
+        PGADMIN_DEFAULT_PASSWORD: app
+    ports:
+        - "5050:80"
+    volumes:
+        - ./pgAdmin/pgAdmin:/var/lib/pgadmin
+        - ./pgAdmin/pgAdmin_storage:/var/lib/pgadmin/storage/
+    depends_on:
+        - pgserver
+
+  zookeeper:
+    image: zookeeper:3.4.9
+    container_name: zookeeper
+    hostname: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+        ZOO_MY_ID: 1
+        ZOO_PORT: 2181
+        ZOO_SERVERS: server.1=zookeeper:2888:3888
+        ZOOKEEPER_TICK_TIME: 2000
+        ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - ./zk-single-kafka-multiple/zookeeper/data:/data
+      - ./zk-single-kafka-multiple/zookeeper/datalog:/datalog
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    ports:
+      - 19092:19092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+  kafdrop:
+    container_name: kafdrop
+    image: obsidiandynamics/kafdrop
+    restart: "no"
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9092"
